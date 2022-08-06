@@ -8,16 +8,7 @@ on:
         description: 'SSH connection to Actions'
         required: false
         default: 'false'
-env:
-  REPO_URL: https://github.com/immortalwrt/immortalwrt
-  REPO_BRANCH: openwrt-18.06-k5.4
-  DIY_SH: OpenWrt-Lean.sh
-  SSH_ACTIONS: false        # SSH 连接 Actions 功能
-  UPLOAD_BIN_DIR: true      # 上传 bin 目录。即包含所有 ipk 文件和固件的目录
-  UPLOAD_FIRMWARE: true     # 上传固件的目录
-  UPLOAD_RELEASE: false
-  TZ: Asia/Shanghai
-  
+
 jobs:
   merge:
     name: 编译OpenWrt固件
