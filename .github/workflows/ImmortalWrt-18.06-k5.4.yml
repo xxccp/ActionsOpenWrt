@@ -14,21 +14,14 @@ on:
         description: 'SSH connection to Actions'
         required: false
         default: 'false'
-
-
 jobs:
-  merge:
-    runs-on: Ubuntu-20.04
+  build_openwrt:
+    name: 编译OpenWrt固件
     if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-latest
 
-    name: Build ${{matrix.target}}
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [ctc_18.06]
-    
     steps:
-    - name: 检查
+    - name: 校验本地文件
       uses: actions/checkout@main
 
     - name: 初始化环境
