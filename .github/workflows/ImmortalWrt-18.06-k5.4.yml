@@ -15,18 +15,6 @@ on:
         required: false
         default: 'false'
 
-env:
-  UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
-  UPLOAD_COWTRANSFER: false
-  UPLOAD_WETRANSFER: false
-  UPLOAD_RELEASE: true
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-  REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-  REMOTE_PORT: ${{ secrets.REMOTE_PORT }}
-  DOCKER_ID: ${{ secrets.DOCKER_ID }}
-  DOCKER_PASSWD: ${{ secrets.DOCKER_PASSWD }}  
-  TZ: Asia/Shanghai
 
 jobs:
   merge:
@@ -74,7 +62,6 @@ jobs:
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
         sed -i '$a src-git smpackage https://github.com/kenzok8/small-package' feeds.conf.default
-
     #- name: 自定义安装源
     #  working-directory: ./openwrt
     #  run: |
@@ -85,140 +72,162 @@ jobs:
       run: |
         ./scripts/feeds update -a
         ./scripts/feeds install -a   
-        
-    - name: 自定义配置 ${{matrix.target}}
-      env:
-        CONFIG_FILE: '${{matrix.target}}.config'
-      run: |
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x ./diy-part2.config && ./diy-part2.config
-        cd openwrt
-        sed -i 's#192.168.1.1#10.0.0.1#g' package/base-files/files/bin/config_generate #定制默认IP
-        cp -f feeds/smpackage/diy/default-settings package/emortal/default-settings/files/99-default-settings
-        sed -i 's/v$date1/June/g' package/emortal/default-settings/files/99-default-settings
-        cp -f feeds/smpackage/diy/banner package/emortal/default-settings/files/openwrt_banner
-        sed -i 's/%D %V, %C/openwrt June by kenzo/g' package/emortal/default-settings/files/openwrt_banner
-        cp -f feeds/smpackage/diy/banner package/base-files/files/etc/banner
-        sed -i 's/%D %V, %C/openwrt June by kenzo/g' package/base-files/files/etc/banner
-        cp -f feeds/smpackage/diy/index_x86.htm package/emortal/autocore/files/generic/index.htm
-        cp -f feeds/smpackage/diy/${{matrix.target}}.config .config && make defconfig
-        
-    - name: 下载包文件
-      working-directory: ./openwrt
-      run: |
-        make download -j$(nproc)
-        find dl -size -1024c -exec rm -f {} \;
+        sed -i 's#192.168.1.1#10.1.0.1#g' package/base-files/files/bin/config_generate #定制默认IP
+    - name: Generate configuration file
+            run: |
+              rm -f ./.config*
+              touch ./.config
+              
+              
+              
+             #
+             # ========================固件定制部分========================
+             #
+             #
+             # 如果不对本区块做出任何编辑, 则生成默认配置固件.
+             #
+             # 以下为定制化固件选项和说明:
+             #
+             #
+             # 有些插件/选项是默认开启的, 如果想要关闭, 请参照以下示例进行编写:
+             #
+             #          =========================================
+             #         |  # 取消编译VMware镜像:                    |
+             #         |  cat >> .config <<EOF                   |
+             #         |  # CONFIG_VMDK_IMAGES is not set        |
+             #         |  EOF                                    |
+             #          =========================================
+             #
+             #
+             # 以下是一些提前准备好的一些插件选项.
+             # 直接取消注释相应代码块即可应用. 不要取消注释代码块上的汉字说明.
+             # 如果不需要代码块里的某一项配置, 只需要删除相应行.
+             #
+             # 如果需要其他插件, 请按照示例自行添加.
+             # 注意, 只需添加依赖链顶端的包. 如果你需要插件 A, 同时 A 依赖 B, 即只需要添加 A.
+             #
+             # 无论你想要对固件进行怎样的定制, 都需要且只需要修改 EOF 回环内的内容.
+             #
+             # 编译固件:
+             cat >> .config <<EOF
+             CONFIG_TARGET_ramips=y
+             CONFIG_TARGET_ramips_mt7621=y
+             CONFIG_TARGET_ramips_mt7621_DEVICE_ubnt_edgerouter-x=y
+             EOF
 
-    - name: 设置缓存
-      uses: klever1988/cachewrtbuild@main
-      with:
-        ccache: 'true'
-        prefix: ${{ github.workspace }}/openwrt
+             # IPv6支持:
+             cat >> .config <<EOF
+             #CONFIG_IPV6=y
+             #CONFIG_KERNEL_IPV6=y
+             CONFIG_PACKAGE_ipv6helper=y
+             #CONFIG_PACKAGE_dnsmasq_full_dhcpv6=y
+             #CONFIG_PACKAGE_ip6tables=y
+             #CONFIG_PACKAGE_iptables-mod-extra=y
+             EOF
 
-    - name: 编译固件
-      working-directory: ./openwrt
-      run: |
-        echo -e "$(($(nproc)+1)) thread compile"
-        make -j$(($(nproc)+1)) || make -j1 V=s
-        echo "::set-output name=status::success"        
-     
-    - name: 检查空间使用情况
-      if: (!cancelled())
-      run: df -hT
+             # 常用LuCI插件选择, 主要定制passwall与ssr-plus
+             cat >> .config <<EOF
+             CONFIG_PACKAGE_luci-app-adguardhome=y
+             CONFIG_PACKAGE_luci-app-adguardhome_INCLUDE_binary=y
+             CONFIG_PACKAGE_luci-app-advanced-reboot=y
+             CONFIG_PACKAGE_luci-app-advancedsetting=y
+             CONFIG_PACKAGE_luci-app-argon-config=y
+             CONFIG_PACKAGE_luci-app-bypass_INCLUDE_ShadowsocksR_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-bypass_INCLUDE_Simple_Obfs=y
+             CONFIG_PACKAGE_luci-app-bypass_INCLUDE_Xray=y
+             CONFIG_PACKAGE_luci-app-bypass_INCLUDE_Socks_Server=y
+             CONFIG_PACKAGE_luci-app-diskman_INCLUDE_btrfs_progs=y
+             CONFIG_PACKAGE_luci-app-diskman_INCLUDE_lsblk=y
+             CONFIG_PACKAGE_luci-app-filetransfer=y
+             CONFIG_PACKAGE_luci-app-firewall=y
+             CONFIG_PACKAGE_luci-app-frpc=y
+             CONFIG_PACKAGE_luci-app-mwan3=y
+             CONFIG_PACKAGE_luci-app-mwan3helper=y
+             CONFIG_PACKAGE_luci-app-netdata=y
+             CONFIG_PACKAGE_luci-app-nlbwmon=y
+             CONFIG_PACKAGE_luci-app-opkg=y
+             CONFIG_PACKAGE_luci-app-passwall_Transparent_Proxy=y
+             CONFIG_PACKAGE_luci-app-passwall_INCLUDE_ChinaDNS_NG=y
+             CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-passwall_INCLUDE_ShadowsocksR_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Simple_Obfs=y
+             CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Trojan_Plus=y
+             CONFIG_PACKAGE_luci-app-passwall2_Transparent_Proxy=y
+             CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Simple_Obfs=y
+             CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-webui=y
+             CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-ng=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_IPT2Socks=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ShadowsocksR_Libev_Client=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Simple_Obfs=y
+             CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Trojan=y
+             CONFIG_PACKAGE_luci-app-syncdial=y
+             CONFIG_PACKAGE_luci-app-ttyd=y
+             CONFIG_PACKAGE_luci-app-turboacc=y
+             CONFIG_PACKAGE_TURBOACC_INCLUDE_OFFLOADING=y
+             CONFIG_PACKAGE_TURBOACC_INCLUDE_BBR_CCA=y
+             CONFIG_PACKAGE_luci-app-udpxy=y
+             CONFIG_PACKAGE_luci-app-upnp=y
+             CONFIG_PACKAGE_luci-app-vssr=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_Hysteria=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_Kcptun=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_ShadowsocksR_Libev_Server=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_Trojan=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_Xray=y
+             CONFIG_PACKAGE_luci-app-vssr_INCLUDE_Xray_plugin=y
+             CONFIG_PACKAGE_luci-app-watchcat=y
+             CONFIG_PACKAGE_luci-app-wireguard=y
+             CONFIG_PACKAGE_luci-app-wolplus=y
+             CONFIG_PACKAGE_luci-app-wrtbwmon=y
+             CONFIG_PACKAGE_luci-app-zerotier=y
+             # end of 3. Applications
+             EOF
+             # LuCI主题:
+             cat >> .config <<EOF
+             CONFIG_PACKAGE_luci-theme-argon-dark-mod=y
+             CONFIG_PACKAGE_luci-theme-argon-light-mod=y
+             CONFIG_PACKAGE_luci-theme-material=y
+             CONFIG_PACKAGE_luci-theme-netgear=y
+             EOF
+             # 常用软件包:
+             cat >> .config <<EOF
+             CONFIG_PACKAGE_curl=y
+             CONFIG_PACKAGE_htop=y
+             CONFIG_PACKAGE_nano=y
+             CONFIG_PACKAGE_screen=y
+             CONFIG_PACKAGE_tree=y
+             CONFIG_PACKAGE_vim-fuller=y
+             CONFIG_PACKAGE_wget=y
+             EOF
+             # ========================固件定制部分结束========================
+             # 
+             sed -i 's/^[ \\t]*//g' ./.config
+             make defconfig
+          - name: Make download
+            run: |
+              make download -j8
+              find ./dl/ -size -1024c -exec rm -f {} \\;
+              df -h
+          - name: Compile firmware
+            run: |
+              make -j$(nproc) || make -j1 V=s
+              echo "======================="
+              echo "Space usage:"
+              echo "======================="
+              df -h
+              echo "======================="
+              du -h --max-depth=1 ./ --exclude=build_dir --exclude=bin
+              du -h --max-depth=1 ./build_dir
+              du -h --max-depth=1 ./bin
+          # - name: Prepare artifact
+          #   run: find ./bin/targets/ -type d -name "packages" | xargs rm -rf {}
 
-    - name: 上传bin目录
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
-
-    - name: 整理文件
-      id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-      run: |
-        mkdir firmware
-        mv -f openwrt/bin/targets/*/*/{*combined*,*sysupgrade*} ./firmware/ 2>/dev/null || true
-        cp openwrt/.config  ./firmware/${{matrix.target}}.config
-        cp openwrt/build_dir/target-*/linux-*/linux-*/.config ./firmware/${{matrix.target}}_kernel.config
-        cd firmware
-        echo "v${{ env.date4 }}" > version.txt
-        md5=$((md5sum *squashfs-sysupgrade* || md5sum *squashfs-combined-efi*) | awk '{print $1}') 2>/dev/null
-        echo $md5 >> version.txt
-        rename -v "s/^immortalwrt/${{ env.VERSION }}-openwrt/" * || true
-        rename -v "s/friendlyarm_//" *gz || true
-        echo $md5 >> version.txt
-        echo ${{matrix.target}} >> version.txt     
-        rm -rf sha256sums
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        
-    - name: 部署文件到服务器
-      uses: easingthemes/ssh-deploy@main
-      with:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        ARGS: "-avzr --exclude="
-        SOURCE: firmware/
-        REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-        REMOTE_PORT: ${{ secrets.REMOTE_PORT }}
-        REMOTE_USER: root
-        TARGET: "/www/wwwroot/${{ secrets.REMOTE_HOST }}/op/firmware/${{matrix.target}}/"         
-      
-    - name: 上传固件目录
-      uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
-      with:
-        name: ${{ env.date3 }}_${{matrix.target}}
-        path: ${{ env.FIRMWARE }}     
-
-    - name: 上传固件cowtransfer
-      id: cowtransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
-      run: |
-        curl -fsSL git.io/file-transfer | sh
-        ./transfer cow --block 2621440 -s -p 64 --no-progress ${FIRMWARE} 2>&1 | tee cowtransfer.log
-        echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
-        echo "::set-output name=url::$(cat cowtransfer.log | grep https | cut -f3 -d" ")"
-
-    - name: 上传固件WeTransfer
-      id: wetransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_WETRANSFER == 'true' && !cancelled()
-      run: |
-        curl -fsSL git.io/file-transfer | sh
-        ./transfer wet -s -p 16 --no-progress ${FIRMWARE} 2>&1 | tee wetransfer.log
-        echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
-        echo "::set-output name=url::$(cat wetransfer.log | grep https | cut -f3 -d" ")"
-
-    - name: Generate release tag
-      id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      run: |
-        echo "::set-output name=release_tag::$(date +"%Y.%m.%d-%H%M")"
-        touch release.txt
-        [ $UPLOAD_COWTRANSFER = true ] && echo "🔗 [Cowtransfer](${{ steps.cowtransfer.outputs.url }})" >> release.txt
-        [ $UPLOAD_WETRANSFER = true ] && echo "🔗 [WeTransfer](${{ steps.wetransfer.outputs.url }})" >> release.txt
-        echo "::set-output name=status::success"
-        
-    - name: Upload firmware to release
-      uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
-
-    - name: Delete workflow runs
-      uses: GitRML/delete-workflow-runs@main
-      with:
-        retain_days: 1
-        keep_minimum_runs: 3
-
-    - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@v0.1.0
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-        keep_latest: 3
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 因为我需要得到编译后的ipk插件，所以我选择将完整的/bin/上传
+          - name: Upload artifact
+            uses: actions/upload-artifact@master
+            with:
+              name: OpenWrt firmware
+              path: ./bin/
