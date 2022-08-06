@@ -4,7 +4,7 @@
 # Author: kenzo
 #=================================================
 
-name: openwrt_18.06
+name: EdgeRouter X ImmortalWrt-18.06
 
 on:
   repository_dispatch:
@@ -91,7 +91,7 @@ jobs:
         CONFIG_FILE: '${{matrix.target}}.config'
       run: |
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x ./customize.sh && ./customize.sh
+        chmod +x ./diy-part2.config && ./diy-part2.config
         cd openwrt
         sed -i 's#192.168.1.1#10.0.0.1#g' package/base-files/files/bin/config_generate #定制默认IP
         cp -f feeds/smpackage/diy/default-settings package/emortal/default-settings/files/99-default-settings
