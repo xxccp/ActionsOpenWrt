@@ -11,11 +11,11 @@ on:
 
 jobs:
   merge:
-    name: 编译OpenWrt固件
-    runs-on: Ubuntu-20.04
-    if: github.event.repository.owner.id == github.event.sender.id
+   name: 编译OpenWrt固件
+   runs-on: Ubuntu-20.04
+   if: github.event.repository.owner.id == github.event.sender.id
 
-    steps:
+  steps:
     - name: 校验本地文件
       uses: actions/checkout@main
 
@@ -171,25 +171,14 @@ jobs:
              CONFIG_PACKAGE_luci-app-wolplus=y
              CONFIG_PACKAGE_luci-app-wrtbwmon=y
              CONFIG_PACKAGE_luci-app-zerotier=y
-             # end of 3. Applications
              EOF
+             
              # LuCI主题:
              cat >> .config <<EOF
              CONFIG_PACKAGE_luci-theme-argon-dark-mod=y
              CONFIG_PACKAGE_luci-theme-argon-light-mod=y
-             CONFIG_PACKAGE_luci-theme-material=y
-             CONFIG_PACKAGE_luci-theme-netgear=y
              EOF
-             # 常用软件包:
-             cat >> .config <<EOF
-             CONFIG_PACKAGE_curl=y
-             CONFIG_PACKAGE_htop=y
-             CONFIG_PACKAGE_nano=y
-             CONFIG_PACKAGE_screen=y
-             CONFIG_PACKAGE_tree=y
-             CONFIG_PACKAGE_vim-fuller=y
-             CONFIG_PACKAGE_wget=y
-             EOF
+
              # ========================固件定制部分结束========================
              # 
              sed -i 's/^[ \\t]*//g' ./.config
