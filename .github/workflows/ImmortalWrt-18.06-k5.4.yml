@@ -10,11 +10,9 @@ on:
         default: 'false'
 
 jobs:
-  merge:
-    name: 编译OpenWrt固件
-    runs-on: Ubuntu-20.04
-    if: github.event.repository.owner.id == github.event.sender.id
-
+  build:
+    runs-on: ubuntu-latest
+    
     steps:
     - name: 校验本地文件
       uses: actions/checkout@main
